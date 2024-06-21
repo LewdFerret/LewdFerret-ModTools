@@ -1,0 +1,17 @@
+{
+  "name": "lewdferret-mod-tools",
+  "version": "0.0.1",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc --build",
+    "start": "npm run build && node build/index.js",
+    "test": "echo \"We don't do that here\""
+  },
+  "keywords": [],
+  "author": "LewdFerret",
+  "license": "MIT",
+  "description": "",
+  "dependencies": {
+    "discord.js": "^14.15.3"
+  }
+}
