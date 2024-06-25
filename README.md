@@ -14,7 +14,7 @@ npm i
 Create a config.json in the data directory, containing a valid token and client id:
 ```json
 {
-  "token": "[YOUR TOKEN HERE]"
+  "token": "[YOUR TOKEN HERE]",
   "client_id": "[YOUR CLIENT ID HERE]"
 }
 ```

@@ -1,13 +1,13 @@
-import { Client, Collection, GatewayIntentBits, SlashCommandBuilder } from "discord.js";
+import { Client, GatewayIntentBits, RESTPostAPIChatInputApplicationCommandsJSONBody } from "discord.js";
 
 export default class BotClient extends Client {
     token: string;
-    commands: Collection<string, SlashCommandBuilder>;
+    commands: RESTPostAPIChatInputApplicationCommandsJSONBody[];
 
     constructor(intents: GatewayIntentBits[], token: string) {
         super({ intents: intents });
         this.token = token;
-        this.commands = new Collection();
+        this.commands = [];
     }
 
     public async login(): Promise<string> {
