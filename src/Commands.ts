@@ -28,13 +28,6 @@ export const clearChannelCmd = new SlashCommandBuilder()
 export const kickGuiCmd = new SlashCommandBuilder()
     .setName('kick-gui')
     .setDescription('Kick a server member with a gui.')
-    .addChannelOption((sendGuiTo) => {
-        sendGuiTo.setName('send-to-channel')
-            .setDescription('The channel to send the ui to. This will mention you.')
-            .setRequired(false);
-
-        return sendGuiTo;
-    })
     .setDefaultMemberPermissions((
         PermissionFlagsBits.UseApplicationCommands |
         PermissionFlagsBits.KickMembers 

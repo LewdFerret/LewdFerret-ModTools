@@ -1,6 +1,6 @@
 {
   "name": "lewdferret-mod-tools",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "index.js",
   "scripts": {
     "build": "tsc --build",
@@ -13,6 +13,7 @@
   "description": "",
   "dependencies": {
     "discord.js": "^14.15.3",
-    "glob": "^10.4.2"
+    "glob": "^10.4.2",
+    "typescript-json-serializer": "^6.0.1"
   }
 }
