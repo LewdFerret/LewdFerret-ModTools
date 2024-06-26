@@ -1,4 +1,4 @@
-import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
+import { PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 
 export const clearChannelCmd = new SlashCommandBuilder()
     .setName('clear-channel')
@@ -23,14 +23,6 @@ export const clearChannelCmd = new SlashCommandBuilder()
         PermissionFlagsBits.UseApplicationCommands |
         PermissionFlagsBits.ManageMessages |
         PermissionFlagsBits.ReadMessageHistory
-    ));
-
-export const kickGuiCmd = new SlashCommandBuilder()
-    .setName('kick-gui')
-    .setDescription('Kick a server member with a gui.')
-    .setDefaultMemberPermissions((
-        PermissionFlagsBits.UseApplicationCommands |
-        PermissionFlagsBits.KickMembers 
     ));
 
 export const kickCmd = new SlashCommandBuilder()
