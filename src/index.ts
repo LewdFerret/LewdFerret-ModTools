@@ -1,13 +1,13 @@
-import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, ChannelType, ChatInputCommandInteraction, Colors, EmbedBuilder, GatewayIntentBits, GuildMember, GuildTextBasedChannel, Message, MessageManager, PartialMessage, REST, Routes, StageChannel, TextBasedChannel, VoiceChannel } from 'discord.js';
+import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, ChannelType, ChatInputCommandInteraction, Colors, EmbedBuilder, GatewayIntentBits, GuildMember, GuildTextBasedChannel, Message, MessageManager, PartialMessage, PermissionFlagsBits, REST, Routes, StageChannel, TextBasedChannel, VoiceChannel } from 'discord.js';
 import BotClient from './BotClient';
 import config from '../data/config.json';
-import { clearChannelCmd, kickCmd, testCmd } from './Commands';
+import { clearChannelCmd, kickCmd, kickGuiCmd, testCmd } from './Commands';
 
 const TOKEN: string = config.token;
 const CLIENT_ID: string = config.client_id;
 const MOD_ROLE_ID: string = config.mod_role_id;
-const TEST_GUILD_ID: string = '1250191083313299487';
-const ERR_CHANNEL_ID: string = '1254949497721720862';
+const GUILD_ID: string = config.guild_id;
+const ERR_CHANNEL_ID: string = config.error_channel_id;
 
 const CLIENT: BotClient = new BotClient([
     GatewayIntentBits.Guilds,
@@ -27,7 +27,7 @@ process.on('SIGINT', async () => {
 });
 
 process.on('uncaughtException', async (err, origin) => {
-    const errChannel = await (await CLIENT.guilds.fetch(TEST_GUILD_ID)).channels.fetch(ERR_CHANNEL_ID);
+    const errChannel = await (await CLIENT.guilds.fetch(GUILD_ID)).channels.fetch(ERR_CHANNEL_ID);
 
     await (errChannel as GuildTextBasedChannel).send({
         content: `<@&${MOD_ROLE_ID}> I'm hurt!!!\n\nMessage:\n\`\`\`\nUNCAUGHT EXCEPTION: please check log on hosting provider.\n\`\`\``
@@ -50,7 +50,7 @@ CLIENT.once('ready', () => {
 });
 
 CLIENT.on('error', async (err) => {
-    const errChannel = await (await CLIENT.guilds.fetch(TEST_GUILD_ID)).channels.fetch(ERR_CHANNEL_ID);
+    const errChannel = await (await CLIENT.guilds.fetch(GUILD_ID)).channels.fetch(ERR_CHANNEL_ID);
 
     await (errChannel as GuildTextBasedChannel).send({
         content: `<@&${MOD_ROLE_ID}> I'm hurt!!!\n\nMessage:\n\`\`\`\n${err.message}\n\`\`\`\nStack:\`\`\`\n${err.stack}\n\`\`\``
@@ -308,6 +308,34 @@ CLIENT.on('interactionCreate', async (interaction) => {
                     });
                 }
             }
+        } else if(inter.commandName === 'kick-gui') {
+            await inter.deferReply({ ephemeral: true });
+
+            const ticketChannel = inter.guild?.channels.create({
+                type: ChannelType.GuildText,
+                name: `TICKET-kick-${Math.floor(Math.random() * 9999) + 1}`,
+                topic: 'Kick GUI by LewdFerret Mod Tools',
+                permissionOverwrites: [
+                    {
+                        id: inter.user.id,
+                        allow: PermissionFlagsBits.Administrator
+                    },
+                    {
+                        id: MOD_ROLE_ID,
+                        allow: PermissionFlagsBits.Administrator
+                    },
+                    {
+                        id: inter.guild.roles.everyone.id,
+                        deny: PermissionFlagsBits.ViewChannel
+                    }
+                ]
+            });
+
+            if(!ticketChannel) {
+                await inter.editReply(
+                    'Couldn\'t create a new channel...'
+                );
+            }
         } else {
             await inter.reply({
                 content: `Unknown command "${inter.commandName}"!`,
@@ -318,17 +346,15 @@ CLIENT.on('interactionCreate', async (interaction) => {
 });
 
 async function main() {
-    if(!TOKEN || TOKEN.length == 0) {
-        console.error('No (valid) token in data/config.json found.');
-    }
-
-    if(!CLIENT_ID || CLIENT_ID.length == 0) {
-        console.error('No (valid) client id in data/config.json found.');
+    if(!checkConfigValid()) {
+        console.error('Your config is invalid, refer to the README.md for further information...');
+        process.exit(1); // Obsolete, but it gives me peace of mind x3
     }
 
     CLIENT.commands = [
         clearChannelCmd.toJSON(),
         kickCmd.toJSON(),
+        kickGuiCmd.toJSON(),
         testCmd.toJSON(),
     ];
 
@@ -347,24 +373,69 @@ async function main() {
 
 main();
 
+// TODO: implement other commands (see Commands.ts)
 async function tryExecCmd(msg: Message<boolean> | PartialMessage): Promise<void> {
     if(msg.author?.bot)
         return;
 
     // Yaay it works
     if(msg.content === 'mt!clear-channel') {
-        const okMsg = await msg.reply('Ok, hold on. Clearing channel...');
-        const msgManager: MessageManager = msg.channel.messages;
-        const messages = await msgManager.fetch();
-        messages.forEach(async (message) => {
-            if (message.id !== okMsg.id && message.id !== msg.id)
-                await message.delete();
-        });
-        await okMsg.delete();
-        const doneMsg = await msg.reply('Cleared Channel!\n**This message deletes itself after 3 seconds**');
-        setTimeout(async () => {
-            await doneMsg.delete();
-            await msg.delete();
-        }, 3000); // 3 seconds
+        if(msg.member?.permissions.has('ManageMessages')) {
+            const okMsg = await msg.reply('Ok, hold on. Clearing channel...');
+            const msgManager: MessageManager = msg.channel.messages;
+            const messages = await msgManager.fetch();
+            messages.forEach(async (message) => {
+                if (message.id !== okMsg.id && message.id !== msg.id)
+                    await message.delete();
+            });
+            await okMsg.delete();
+            const doneMsg = await msg.reply('Cleared Channel!\n**This message deletes itself after 3 seconds**');
+            setTimeout(async () => {
+                await doneMsg.delete();
+                await msg.delete();
+            }, 3000); // 3 seconds
+        } else {
+            await msg.reply('Sorry but you don\'t have the needed permission(s):\n- Manage Messages');
+        }
+    } else if(msg.content?.includes('mt!kick')) {
+        if(msg.member?.permissions.has(PermissionFlagsBits.KickMembers)) {
+            const params = msg.content.split(' ');
+            params.splice(0, 1);
+
+            let user: string = '0';
+            let reason: string | undefined;
+
+            for(const p of params) {
+                if(p && p.includes('<@')) {
+                    user = p.replace(/[^0-9]/g, '');
+                } else {
+                    reason += p;
+                }
+            }
+
+            const toKick = await msg.guild?.members.fetch(user);
+            if(toKick) {
+                await toKick.kick(reason);
+                if(reason && reason.length > 0) {
+                    await msg.reply(`Alrighty! Kicked <@${toKick.id}> with reason '${reason}'!`);
+                } else {
+                    await msg.reply(`Alrighty! Kicked <@${toKick.id}> !`);
+                }
+            } else {
+                msg.reply(`Couldn't find user '${user}'.`);
+            }
+        }
+    } else if(msg.content === 'mt!test') {
+        await msg.reply('I don\'t like test 3:');
     }
+}
+
+function checkConfigValid(): boolean {
+    const tk_valid  = (TOKEN && TOKEN.length !== 0) as boolean;
+    const ci_valid  = (CLIENT_ID && CLIENT_ID.length !== 0) as boolean;
+    const mri_valid = (MOD_ROLE_ID && MOD_ROLE_ID.length !== 0) as boolean;
+    const gi_valid  = (GUILD_ID && GUILD_ID.length !== 0) as boolean;
+    const eci_valid = (ERR_CHANNEL_ID && ERR_CHANNEL_ID.length !== 0) as boolean;
+
+    return (tk_valid && ci_valid && mri_valid && gi_valid && eci_valid);
 }

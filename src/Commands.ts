@@ -47,6 +47,15 @@ export const kickCmd = new SlashCommandBuilder()
         PermissionFlagsBits.KickMembers
     ));
 
+export const kickGuiCmd = new SlashCommandBuilder()
+    .setName('kick-gui')
+    .setDescription('Kick a user with a fancy gui.')
+    .setDMPermission(false)
+    .setDefaultMemberPermissions((
+        PermissionFlagsBits.UseApplicationCommands,
+        PermissionFlagsBits.KickMembers
+    ));
+
 export const testCmd = new SlashCommandBuilder()
     .setName('test')
     .setDescription('Just runs a lil\' test!')
