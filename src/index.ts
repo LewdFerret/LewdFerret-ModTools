@@ -1,7 +1,9 @@
-import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, ChannelType, ChatInputCommandInteraction, Colors, EmbedBuilder, GatewayIntentBits, GuildMember, GuildTextBasedChannel, Message, MessageManager, PartialMessage, PermissionFlagsBits, REST, Routes, StageChannel, TextBasedChannel, VoiceChannel } from 'discord.js';
+import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonInteraction, ButtonStyle, ChannelType, ChatInputCommandInteraction, Colors, EmbedBuilder, GatewayIntentBits, GuildMember, GuildTextBasedChannel, Message, MessageManager, PartialMessage, PermissionFlagsBits, REST, Routes, StageChannel, TextBasedChannel, UserSelectMenuBuilder, VoiceChannel } from 'discord.js';
 import BotClient from './BotClient';
 import config from '../data/config.json';
 import { clearChannelCmd, kickCmd, kickGuiCmd, testCmd } from './Commands';
+import CustomSerializer from './Serialization';
+import fs from 'node:fs';
 
 const TOKEN: string = config.token;
 const CLIENT_ID: string = config.client_id;
@@ -17,6 +19,13 @@ const CLIENT: BotClient = new BotClient([
 ], TOKEN);
 
 const rest: REST = new REST({ version: '10' }).setToken(TOKEN);
+
+var TICKETS: {
+    channel_id?: string,
+    embed_message_id?: string,
+    user_id?: string,
+    reason?: string,
+}[] = [];
 
 process.on('SIGINT', async () => {
     await CLIENT.destroy();
@@ -311,7 +320,7 @@ CLIENT.on('interactionCreate', async (interaction) => {
         } else if(inter.commandName === 'kick-gui') {
             await inter.deferReply({ ephemeral: true });
 
-            const ticketChannel = inter.guild?.channels.create({
+            const ticketChannel = await inter.guild?.channels.create({
                 type: ChannelType.GuildText,
                 name: `TICKET-kick-${Math.floor(Math.random() * 9999) + 1}`,
                 topic: 'Kick GUI by LewdFerret Mod Tools',
@@ -335,12 +344,161 @@ CLIENT.on('interactionCreate', async (interaction) => {
                 await inter.editReply(
                     'Couldn\'t create a new channel...'
                 );
+                return;
             }
+
+            const embed = new EmbedBuilder()
+                .setTitle('KICK GUI')
+                .setColor('#77ee77')
+                .setDescription('Let\'s discuss whom you want to kick and for what...')
+                .setFooter({ text: 'Action performed by LewdFerret Mod Tools' })
+                .setTimestamp(Date.now())
+                .setAuthor({
+                    name: 'LewdFerret Mod Tools',
+                    url: 'https://www.github.com/LewdFerret/LewdFerret-ModTools'
+                });
+            
+            const readyButton = new ButtonBuilder()
+                .setCustomId('readyKickGui')
+                .setStyle(ButtonStyle.Success)
+                .setLabel('I\'m ready!');
+
+            const cancelButton = new ButtonBuilder()
+                .setCustomId('cancelKickGui')
+                .setStyle(ButtonStyle.Primary)
+                .setLabel('Cancel');
+
+            const row1 = new ActionRowBuilder<ButtonBuilder>()
+                .setComponents(
+                    readyButton,
+                    cancelButton
+                );
+
+            const embedMessage = await ticketChannel.send({
+                content: `<@${inter.user.id}> <@&${MOD_ROLE_ID}> Welcome...`,
+                embeds: [ embed ],
+                components: [ row1 ]
+            });
+
+            if(!embedMessage) {
+                await inter.editReply(`Couldn't create embed in <#${ticketChannel.id}> !\nDeleting <#${ticketChannel.id}> in 3 seconds...`);
+
+                setTimeout(async () => await ticketChannel.delete(), 3_000); // 3 seconds
+
+                return;
+            }
+
+            TICKETS.push({
+                channel_id: ticketChannel.id,
+                embed_message_id: embedMessage.id
+            });
+
+            saveTicketData();
+
+            await inter.editReply('You\'re all set!');
+
+            console.log(TICKETS);
         } else {
             await inter.reply({
                 content: `Unknown command "${inter.commandName}"!`,
                 ephemeral: true
             });
+        }
+    } else if(interaction.isButton()) {
+        const inter = (interaction as ButtonInteraction);
+
+        await inter.deferReply();
+
+        loadTicketData();
+
+        const thisTicket = getTicketByChannelId(inter.channelId);
+
+        if(!thisTicket) {
+            await inter.editReply('Sorry, something went wrong.');
+            return;
+        };
+
+
+        if(inter.customId === 'cancelKickGui') {
+            await inter.editReply({
+                content: 'Alrighty, cancelling...'
+            });
+
+            setTimeout(async () => {
+                await inter.channel?.delete();
+            }, 3_000); // 3 seconds
+
+            const index = TICKETS.indexOf(thisTicket);
+
+            if(index !== -1) {
+                TICKETS.splice(index, 1);
+            }
+
+            saveTicketData();
+        } else if(inter.customId === 'readyKickGui') {
+            if(!thisTicket.embed_message_id) {
+                await inter.message.channel.send('Couldn\'t find embed message!');
+                return;
+            }
+
+            if(!thisTicket.channel_id) {
+                await inter.message.channel.send('Seems like the channel id was saved wrong, sorry...');
+                return;
+            }
+
+            const ticketChannel = await inter.guild?.channels.fetch(thisTicket.channel_id);
+
+            if(!ticketChannel) {
+                await inter.message.channel.send('Sorry, but I couldn\'t find the channel...');
+                return;
+            }
+
+            const embed_message = await (ticketChannel as TextBasedChannel).messages.fetch(thisTicket.embed_message_id);
+
+            if(!embed_message) {
+                await inter.message.channel.send('Couldn\'t fetch the embed message!');
+                return;
+            }
+
+            const newEmbed = new EmbedBuilder()
+                .setTitle('KICK GUI')
+                .setColor('#77ee77')
+                .setDescription('So... Which user should it be?')
+                .setFooter({ text: 'Action performed by LewdFerret Mod Tools' })
+                .setTimestamp(Date.now())
+                .setAuthor({
+                    name: 'LewdFerret Mod Tools',
+                    url: 'https://www.github.com/LewdFerret/LewdFerret-ModTools'
+                });
+            
+            const userSelect = new UserSelectMenuBuilder()
+                .setCustomId('kickGuiUserSelect')
+                .setMinValues(1)
+                .setMaxValues(1)
+                .setPlaceholder('Which user to kick...');
+            
+            const confirmButton = new ButtonBuilder()
+                .setCustomId('confirmSelectUserKickGui')
+                .setStyle(ButtonStyle.Success)
+                .setLabel('Confirm Choice');
+            
+            const cancelButton = new ButtonBuilder()
+                .setCustomId('cancelKickGui')
+                .setStyle(ButtonStyle.Primary)
+                .setLabel('Cancel');
+            
+            const row1 = new ActionRowBuilder<UserSelectMenuBuilder>()
+                .setComponents(userSelect);
+            const row2 = new ActionRowBuilder<ButtonBuilder>()
+                .setComponents(confirmButton, cancelButton);
+
+            await embed_message.edit({
+                content: `Next step guys <@${inter.user.id}> <@&${MOD_ROLE_ID}> ...`,
+                embeds: [ newEmbed ],
+                components: [ row1, row2 ]
+            });
+
+            await inter.editReply('I\'m ready...');
         }
     }
 });
@@ -348,8 +506,17 @@ CLIENT.on('interactionCreate', async (interaction) => {
 async function main() {
     if(!checkConfigValid()) {
         console.error('Your config is invalid, refer to the README.md for further information...');
-        process.exit(1); // Obsolete, but it gives me peace of mind x3
+        process.exit(1);
     }
+
+    fs.stat(`${process.cwd()}/data`, (err, stats) => {
+        if(err) throw err;
+
+        if(!stats.isDirectory()) {
+            console.error('You NEED to have a \'data\' directory in your working directory!');
+            process.exit(1);
+        }
+    });
 
     CLIENT.commands = [
         clearChannelCmd.toJSON(),
@@ -367,6 +534,8 @@ async function main() {
 	);
 
 	console.log(`Successfully reloaded ${data.length} application (/) commands.`);
+
+    loadTicketData();
 
     CLIENT.login();
 }
@@ -426,7 +595,7 @@ async function tryExecCmd(msg: Message<boolean> | PartialMessage): Promise<void>
             }
         }
     } else if(msg.content === 'mt!test') {
-        await msg.reply('I don\'t like test 3:');
+        await msg.reply('I don\'t like tests 3:');
     }
 }
 
@@ -438,4 +607,36 @@ function checkConfigValid(): boolean {
     const eci_valid = (ERR_CHANNEL_ID && ERR_CHANNEL_ID.length !== 0) as boolean;
 
     return (tk_valid && ci_valid && mri_valid && gi_valid && eci_valid);
+}
+
+function saveTicketData(): void {
+    let fileContent = CustomSerializer.ticketsToCustom(TICKETS);
+
+    if(!fileContent) throw Error('Unhandled exception while parsing tickets.');
+
+    fs.writeFileSync(`${process.cwd()}/data/tickets`, fileContent, {
+        encoding: 'utf-8',
+        flag: 'w'
+    });
+}
+
+function loadTicketData(): void {
+    fs.readFile(`${process.cwd()}/data/tickets`, 'utf-8', (err, data) => {
+        if(err) throw err;
+
+        const tickets = CustomSerializer.ticketsFromCustom(data);
+
+        if(!tickets) throw Error('Error while parsing tickets.');
+
+        TICKETS = tickets;
+    });
+}
+
+function getTicketByChannelId(channel_id: string): {
+    channel_id?: string,
+    embed_message_id?: string,
+    user_id?: string,
+    reason?: string
+} | undefined {
+    return TICKETS.find(v => v.channel_id === channel_id);
 }
