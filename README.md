@@ -11,7 +11,9 @@ Then install everything by running:
 npm i
 ```
 
-Create a data/config.json file, with the following format:
+Create a directory called 'data'
+
+Create a config.json file, in the data directory, with the following format:
 ```json
 {
     "token": "[YOUR TOKEN]",

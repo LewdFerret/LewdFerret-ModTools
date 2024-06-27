@@ -1,4 +1,4 @@
-import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonInteraction, ButtonStyle, ChannelType, ChatInputCommandInteraction, Colors, EmbedBuilder, GatewayIntentBits, GuildMember, GuildTextBasedChannel, Message, MessageManager, PartialMessage, PermissionFlagsBits, REST, Routes, StageChannel, TextBasedChannel, UserSelectMenuBuilder, VoiceChannel } from 'discord.js';
+import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonInteraction, ButtonStyle, ChannelType, ChatInputCommandInteraction, Colors, ComponentType, EmbedBuilder, GatewayIntentBits, Guild, GuildMember, GuildTextBasedChannel, Message, MessageManager, PartialMessage, PermissionFlagsBits, REST, Routes, StageChannel, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, TextBasedChannel, TextInputBuilder, TextInputStyle, UserSelectMenuBuilder, UserSelectMenuInteraction, VoiceChannel } from 'discord.js';
 import BotClient from './BotClient';
 import config from '../data/config.json';
 import { clearChannelCmd, kickCmd, kickGuiCmd, testCmd } from './Commands';
@@ -396,8 +396,6 @@ CLIENT.on('interactionCreate', async (interaction) => {
             saveTicketData();
 
             await inter.editReply('You\'re all set!');
-
-            console.log(TICKETS);
         } else {
             await inter.reply({
                 content: `Unknown command "${inter.commandName}"!`,
@@ -409,17 +407,16 @@ CLIENT.on('interactionCreate', async (interaction) => {
 
         await inter.deferReply();
 
-        loadTicketData();
-
-        const thisTicket = getTicketByChannelId(inter.channelId);
-
-        if(!thisTicket) {
-            await inter.editReply('Sorry, something went wrong.');
-            return;
-        };
-
-
         if(inter.customId === 'cancelKickGui') {
+            loadTicketData();
+
+            const thisTicket = getTicketByChannelId(inter.channelId);
+
+            if(!thisTicket) {
+                await inter.editReply('Sorry, something went wrong.');
+                return;
+            };
+
             await inter.editReply({
                 content: 'Alrighty, cancelling...'
             });
@@ -436,6 +433,15 @@ CLIENT.on('interactionCreate', async (interaction) => {
 
             saveTicketData();
         } else if(inter.customId === 'readyKickGui') {
+            loadTicketData();
+
+            const thisTicket = getTicketByChannelId(inter.channelId);
+
+            if(!thisTicket) {
+                await inter.editReply('Sorry, something went wrong.');
+                return;
+            };
+
             if(!thisTicket.embed_message_id) {
                 await inter.message.channel.send('Couldn\'t find embed message!');
                 return;
@@ -480,7 +486,8 @@ CLIENT.on('interactionCreate', async (interaction) => {
             const confirmButton = new ButtonBuilder()
                 .setCustomId('confirmSelectUserKickGui')
                 .setStyle(ButtonStyle.Success)
-                .setLabel('Confirm Choice');
+                .setLabel('Confirm Choice')
+                .setDisabled(true);
             
             const cancelButton = new ButtonBuilder()
                 .setCustomId('cancelKickGui')
@@ -498,7 +505,360 @@ CLIENT.on('interactionCreate', async (interaction) => {
                 components: [ row1, row2 ]
             });
 
-            await inter.editReply('I\'m ready...');
+            const r = await inter.editReply('I\'m ready...');
+            await r.delete();
+        } else if(inter.customId === 'confirmSelectUserKickGui') {
+            loadTicketData();
+
+            const thisTicket = getTicketByChannelId(inter.channelId);
+
+            if(!thisTicket) {
+                await inter.editReply('Sorry, something went wrong.');
+                return;
+            };
+
+            if(!thisTicket.channel_id) {
+                await inter.reply('Sorry but this channels id is missing.');
+                return;
+            }
+
+            const ticketChannel = await inter.guild?.channels.fetch(thisTicket.channel_id);
+
+            if(!ticketChannel) {
+                await inter.editReply('Sorry but I couldn\'t find this channel.');
+                return;
+            }
+
+            if(!thisTicket.embed_message_id) {
+                await inter.editReply('Sorry but I couldn\'t find the embed message\'s id.');
+                return;
+            }
+
+            const embedMessage = await (ticketChannel as TextBasedChannel).messages.fetch(thisTicket.embed_message_id);
+
+            if(!embedMessage) {
+                await inter.editReply('Sorry but I couldn\'t find the embed message');
+                return;
+            }
+
+            const reasonSelect = new StringSelectMenuBuilder()
+                .setCustomId('kickReasonSelect')
+                .setPlaceholder('Kick Reason (Optional)')
+                .setMaxValues(1)
+                .setOptions(
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel('1 - TODO')
+                        .setValue('1 - TODO'),
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel('2 - TODO')
+                        .setValue('2 - TODO'),
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel('3 - TODO')
+                        .setValue('3 - TODO'),
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel('4 - TODO')
+                        .setValue('4 - TODO'),
+                    new StringSelectMenuOptionBuilder()
+                        .setLabel('C - Custom reason')
+                        .setValue('C - Custom reason')
+                );
+            
+            const confirmBtn = new ButtonBuilder()
+                .setCustomId('confirmReasonDlgKickGui')
+                .setLabel('Confirm')
+                .setStyle(ButtonStyle.Success);
+            
+            const cancelBtn = new ButtonBuilder()
+                .setCustomId('cancelKickGui')
+                .setLabel('Cancel')
+                .setStyle(ButtonStyle.Primary);
+
+            const row1 = new ActionRowBuilder<StringSelectMenuBuilder>()
+                .setComponents(reasonSelect);
+            
+            const row2 = new ActionRowBuilder<ButtonBuilder>()
+                .setComponents(confirmBtn, cancelBtn);
+            
+            const embed = new EmbedBuilder()
+                .setTitle('KICK GUI')
+                .setColor('#77ee77')
+                .setDescription(`Ok, so you want to kick <@${thisTicket.user_id}>.\nNow, for which reason? (If you dare to say...)`)
+                .setFooter({ text: 'Action performed by LewdFerret Mod Tools' })
+                .setTimestamp(Date.now())
+                .setAuthor({
+                    name: 'LewdFerret Mod Tools',
+                    url: 'https://www.github.com/LewdFerret/LewdFerret-ModTools'
+                });
+            
+            await embedMessage.edit({
+                content: `Alright one last step guys... <@${inter.user.id}> <@&${MOD_ROLE_ID}>`,
+                components: [
+                    row1,
+                    row2
+                ],
+                embeds: [ embed ]
+            });
+
+            const r = await inter.editReply('I\'m ready again guys!');
+            await r.delete();
+        } else if(inter.customId === 'confirmReasonDlgKickGui') {
+            loadTicketData();
+
+            const thisTicket = getTicketByChannelId(inter.channelId);
+
+            if(!thisTicket) {
+                await inter.editReply('Sorry, something went wrong.');
+                return;
+            };
+
+            if(!thisTicket.channel_id) {
+                await inter.reply('Sorry but this channels id is missing.');
+                return;
+            }
+
+            const ticketChannel = await inter.guild?.channels.fetch(thisTicket.channel_id);
+
+            if(!ticketChannel) {
+                await inter.editReply('Sorry but I couldn\'t find this channel.');
+                return;
+            }
+
+            if(!thisTicket.embed_message_id) {
+                await inter.editReply('Sorry but I couldn\'t find the embed message\'s id.');
+                return;
+            }
+
+            const embedMessage = await (ticketChannel as TextBasedChannel).messages.fetch(thisTicket.embed_message_id);
+
+            if(!embedMessage) {
+                await inter.editReply('Sorry but I couldn\'t find the embed message');
+                return;
+            }
+
+            const confirmBtn = new ButtonBuilder()
+                .setCustomId('confirmKickUserKickGui')
+                .setLabel('Kick User')
+                .setStyle(ButtonStyle.Danger);
+            
+            const cancelBtn = new ButtonBuilder()
+                .setCustomId('cancelKickGui')
+                .setLabel('Cancel')
+                .setStyle(ButtonStyle.Primary);
+            
+            const row1 = new ActionRowBuilder<ButtonBuilder>()
+                .setComponents(confirmBtn, cancelBtn);
+            
+            const embed = new EmbedBuilder()
+                .setTitle('KICK GUI')
+                .setColor('#77ee77')
+                .setDescription(`Ok, so you want to kick <@${thisTicket.user_id}>.\nCurrent reason: ${thisTicket.reason ? `'${thisTicket.reason}'` : 'NONE'}`)
+                .setFooter({ text: 'Action performed by LewdFerret Mod Tools' })
+                .setTimestamp(Date.now())
+                .setAuthor({
+                    name: 'LewdFerret Mod Tools',
+                    url: 'https://www.github.com/LewdFerret/LewdFerret-ModTools'
+                });
+            
+            await embedMessage.edit({
+                content: `Now comes the fun part... <@${inter.user.id}> <@&${MOD_ROLE_ID}>`,
+                components: [
+                    row1
+                ],
+                embeds: [ embed ]
+            });
+
+            const r = await inter.editReply('I\'m ready again guys!');
+            await r.delete();
+        } else if(inter.customId === 'confirmKickUserKickGui') {
+            loadTicketData();
+
+            const thisTicket = getTicketByChannelId(inter.channelId);
+
+            if(!thisTicket) {
+                await inter.editReply('Sorry, something went wrong.');
+                return;
+            };
+
+            if(!thisTicket.channel_id) {
+                await inter.reply('Sorry but this channels id is missing.');
+                return;
+            }
+
+            const ticketChannel = await inter.guild?.channels.fetch(thisTicket.channel_id);
+
+            if(!ticketChannel) {
+                await inter.editReply('Sorry but I couldn\'t find this channel.');
+                return;
+            }
+
+            if(!thisTicket.embed_message_id) {
+                await inter.editReply('Sorry but I couldn\'t find the embed message\'s id.');
+                return;
+            }
+
+            const embedMessage = await (ticketChannel as TextBasedChannel).messages.fetch(thisTicket.embed_message_id);
+
+            if(!embedMessage) {
+                await inter.editReply('Sorry but I couldn\'t find the embed message');
+                return;
+            }
+
+            if(!thisTicket.user_id) {
+                await inter.editReply('Couldn\'t get the user id to kick');
+                return;
+            }
+
+            const user = await inter.guild?.members.fetch(thisTicket.user_id);
+
+            if(!user) {
+                await inter.editReply('Couldn\'t get the user to kick');
+                return;
+            }
+
+            user.kick(thisTicket.reason);
+
+            const embed = new EmbedBuilder()
+                .setTitle('KICK GUI')
+                .setColor('#77ee77')
+                .setDescription(`Ok, kicked <@${thisTicket.user_id}>,\nfor ${
+                    thisTicket.reason ? `'${thisTicket.reason}'` :
+                        'Apparently no reason...'
+                }`)
+                .setFooter({ text: 'Action performed by LewdFerret Mod Tools' })
+                .setTimestamp(Date.now())
+                .setAuthor({
+                    name: 'LewdFerret Mod Tools',
+                    url: 'https://www.github.com/LewdFerret/LewdFerret-ModTools'
+                });
+
+            await embedMessage.edit({
+                content: `Well done guys! <@${inter.user.id}> <@&${MOD_ROLE_ID}>`,
+                components: [],
+                embeds: [ embed ]
+            });
+
+            setTimeout(async () => {
+                await inter.channel?.delete();
+            }, 3_000); // 3 seconds
+
+            const index = TICKETS.indexOf(thisTicket);
+
+            if(index !== -1) {
+                TICKETS.splice(index, 1);
+            }
+    
+            saveTicketData();
+            
+            const r = await inter.editReply('Alright');
+            await r.delete();
+        }
+    } else if(interaction.isUserSelectMenu()) {
+        const inter = (interaction as UserSelectMenuInteraction);
+
+        await inter.deferReply();
+
+        if(inter.customId === 'kickGuiUserSelect') {
+            const user = inter.values[0];
+
+            const ticket = getTicketByChannelId(inter.channelId);
+
+            if(!ticket) {
+                await inter.editReply('Couldn\'t fetch corresponding ticket.');
+                return;
+            }
+
+            ticket.user_id = user;
+
+            if(ticket.embed_message_id) {
+                const embed_message = await inter.channel?.messages.fetch(ticket.embed_message_id);
+
+                if(embed_message) {
+                    const newEmbed = new EmbedBuilder()
+                        .setTitle('KICK GUI')
+                        .setColor('#77ee77')
+                        .setDescription(`Looks like it'll be <@${ticket.user_id}> !`)
+                        .setFooter({ text: 'Action performed by LewdFerret Mod Tools' })
+                        .setTimestamp(Date.now())
+                        .setAuthor({
+                            name: 'LewdFerret Mod Tools',
+                            url: 'https://www.github.com/LewdFerret/LewdFerret-ModTools'
+                        });
+
+                    const userSelect = new UserSelectMenuBuilder()
+                        .setCustomId('kickGuiUserSelect')
+                        .setMinValues(1)
+                        .setMaxValues(1)
+                        .setPlaceholder('Which user to kick...');
+
+                    const confirmButton = new ButtonBuilder()
+                        .setCustomId('confirmSelectUserKickGui')
+                        .setStyle(ButtonStyle.Success)
+                        .setLabel('Confirm Choice')
+                        .setDisabled(false);
+
+                    const cancelButton = new ButtonBuilder()
+                        .setCustomId('cancelKickGui')
+                        .setStyle(ButtonStyle.Primary)
+                        .setLabel('Cancel');
+
+                    const row1 = new ActionRowBuilder<UserSelectMenuBuilder>()
+                        .setComponents(userSelect);
+                    const row2 = new ActionRowBuilder<ButtonBuilder>()
+                        .setComponents(confirmButton, cancelButton);
+
+                    await embed_message.edit({
+                        content: `Wating for you to confirm <@${inter.user.id}> <@&${MOD_ROLE_ID}> ...`,
+                        embeds: [ newEmbed ],
+                        components: [ row1, row2 ]
+                    });
+                }
+            }
+
+            saveTicketData();
+
+            const r = await inter.editReply('Alright, saved selection...');
+            await r.delete();
+        } else if(inter.customId === 'kickReasonSelect') {
+            const reason = inter.values[0];
+
+            const thisTicket = getTicketByChannelId(inter.channelId);
+            
+            if(!thisTicket) {
+                await inter.editReply('Couldn\'t fetch corresponding ticket.');
+                return;
+            }
+
+            thisTicket.reason = reason;
+
+            if(!thisTicket.embed_message_id) {
+                await inter.editReply('Couldn\'t find embed message\'s id.');
+                return;
+            }
+
+            const embed_message = await inter.channel?.messages.fetch(thisTicket.embed_message_id);
+
+            if(embed_message) {
+                const embed = new EmbedBuilder()
+                .setTitle('KICK GUI')
+                .setColor('#77ee77')
+                .setDescription(`Ok, so you want to kick <@${thisTicket.user_id}>.\nLooks like you want to kick them for '${reason}'.`)
+                .setFooter({ text: 'Action performed by LewdFerret Mod Tools' })
+                .setTimestamp(Date.now())
+                .setAuthor({
+                    name: 'LewdFerret Mod Tools',
+                    url: 'https://www.github.com/LewdFerret/LewdFerret-ModTools'
+                });
+            
+                await embed_message.edit({
+                    content: `Alright one last step guys... <@${thisTicket.user_id}> <@&${MOD_ROLE_ID}>`,
+                    embeds: [ embed ]
+                });
+            }
+
+            saveTicketData();
+
+            const r = await inter.editReply('Alright, saved selection...');
+            await r.delete();
         }
     }
 });
