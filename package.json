@@ -11,7 +11,7 @@
   "keywords": [],
   "author": "LewdFerret",
   "license": "MIT",
-  "description": "",
+  "description": "A little bot I set up for my discord server. (not public yet)",
   "dependencies": {
     "discord.js": "^14.15.3"
   }
