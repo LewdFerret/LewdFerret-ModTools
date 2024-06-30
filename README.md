@@ -1,5 +1,5 @@
 # LewdFerret Mod Tools
-bla
+A little bot I set up for my discord server. (not public yet)
 
 ## Setup
 If you don't have typescript installed run:
